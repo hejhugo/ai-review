@@ -32,6 +32,8 @@ class CostService(CostServiceProtocol):
             output_cost=output_cost,
             prompt_tokens=result.prompt_tokens,
             completion_tokens=result.completion_tokens,
+            cache_creation_tokens=result.cache_creation_tokens,
+            cache_read_tokens=result.cache_read_tokens,
         )
 
         self.reports.append(report)
@@ -47,6 +49,8 @@ class CostService(CostServiceProtocol):
         output_cost = sum(report.output_cost for report in self.reports)
         prompt_tokens = sum(report.prompt_tokens for report in self.reports)
         completion_tokens = sum(report.completion_tokens for report in self.reports)
+        cache_creation_tokens = sum(report.cache_creation_tokens for report in self.reports)
+        cache_read_tokens = sum(report.cache_read_tokens for report in self.reports)
 
         return CostReportSchema(
             model=model,
@@ -55,4 +59,6 @@ class CostService(CostServiceProtocol):
             input_cost=input_cost,
             output_cost=output_cost,
             total_cost=total_cost,
+            cache_creation_tokens=cache_creation_tokens,
+            cache_read_tokens=cache_read_tokens,
         )

@@ -34,10 +34,8 @@ class OpenAILLMClient(LLMClientProtocol):
     async def chat_v2(self, prompt: str, prompt_system: str) -> ChatResultSchema:
         request = OpenAIResponsesRequestSchema(
             model=self.meta.model,
-            input=[
-                OpenAIInputMessageSchema(role="system", content=prompt_system),
-                OpenAIInputMessageSchema(role="user", content=prompt),
-            ],
+            instructions=prompt_system,
+            input=[OpenAIInputMessageSchema(role="user", content=prompt)],
             temperature=self.meta.temperature,
             max_output_tokens=self.meta.max_tokens,
         )
@@ -47,6 +45,7 @@ class OpenAILLMClient(LLMClientProtocol):
             total_tokens=response.usage.total_tokens,
             prompt_tokens=response.usage.input_tokens,
             completion_tokens=response.usage.output_tokens,
+            cache_read_tokens=response.usage.cached_tokens,
         )
 
     async def chat(self, prompt: str, prompt_system: str) -> ChatResultSchema:

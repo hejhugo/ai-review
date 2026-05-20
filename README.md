@@ -281,6 +281,29 @@ ai-review:
 
 ---
 
+## 🚀 Prompt Caching
+
+When running multiple review stages in one PR run (inline, context, summary), each stage re-builds the same system-prompt prefix from your prompt files. Prompt caching lets the LLM provider reuse that prefix across calls, reducing input-token cost on the second and third stages.
+
+Enable it with two environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `LLM__CACHE__ENABLED` | `false` | Set to `true` to enable caching. |
+| `LLM__CACHE__MIN_TOKENS` | `1024` | Minimum character count for the system prompt before caching is applied. Prevents caching on tiny prompts. |
+
+**Per-provider behaviour (only when enabled and prefix meets the floor):**
+
+- **Anthropic (Claude):** stamps the last system block with `cache_control: {type: "ephemeral"}`. The 5-minute ephemeral TTL covers any multi-stage run.
+- **OpenAI (Responses API):** passes the system prompt via `instructions`. The Responses API applies prefix caching automatically when the same prefix is reused within a session.
+- **Gemini:** uses `cachedContent` when the system prompt is at or above the provider minimum (roughly 32 768 tokens for Gemini Pro). Below that threshold the call falls back gracefully to an uncached request — no error is raised.
+
+With `LLM__CACHE__ENABLED=false` (the default), behaviour is byte-identical to previous versions for every user.
+
+Cache hit and miss counts are reported in the existing cost-artifact output, alongside prompt and completion tokens.
+
+---
+
 ## 📘 Documentation
 
 See these folders for reference templates and full configuration options:

@@ -12,6 +12,7 @@ class GeminiUsageSchema(BaseModel):
     total_tokens_count: int | None = Field(default=None, alias="totalTokenCount")
     candidates_token_count: int | None = Field(default=None, alias="candidatesTokenCount")
     output_thoughts_token_count: int | None = Field(default=None, alias="outputThoughtsTokenCount")
+    cached_content_token_count: int | None = Field(default=None, alias="cachedContentTokenCount")
 
     @property
     def total_tokens(self) -> int:
@@ -53,6 +54,7 @@ class GeminiChatRequestSchema(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     contents: list[GeminiContentSchema]
+    cached_content: str | None = Field(alias="cachedContent", default=None)
     generation_config: GeminiGenerationConfigSchema | None = Field(
         alias="generationConfig",
         default=None

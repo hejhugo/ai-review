@@ -1,10 +1,21 @@
 from pydantic import BaseModel
 
 
+class OpenAIInputTokensDetailsSchema(BaseModel):
+    cached_tokens: int = 0
+
+
 class OpenAIResponseUsageSchema(BaseModel):
     total_tokens: int
     input_tokens: int
     output_tokens: int
+    input_tokens_details: OpenAIInputTokensDetailsSchema | None = None
+
+    @property
+    def cached_tokens(self) -> int:
+        if self.input_tokens_details is not None:
+            return self.input_tokens_details.cached_tokens
+        return 0
 
 
 class OpenAIInputMessageSchema(BaseModel):

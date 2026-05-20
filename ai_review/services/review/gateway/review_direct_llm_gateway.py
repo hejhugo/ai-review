@@ -32,7 +32,9 @@ class ReviewDirectLLMGateway(ReviewLLMGatewayProtocol):
             report = self.cost.calculate(
                 CalculateCostSchema(
                     prompt_tokens=result.prompt_tokens,
-                    completion_tokens=result.completion_tokens
+                    completion_tokens=result.completion_tokens,
+                    cache_creation_tokens=result.cache_creation_tokens,
+                    cache_read_tokens=result.cache_read_tokens,
                 )
             )
             if report:
