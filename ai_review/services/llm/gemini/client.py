@@ -19,12 +19,12 @@ class GeminiLLMClient(LLMClientProtocol):
         cache = settings.llm.cache
 
         cached_content_name: str | None = None
-        if cache.enabled and len(prompt_system) >= cache.min_tokens:
-            api_token = settings.llm.http_client.api_token_value
-            cached_content_name = get_or_create_cached_content(
+        cache_creation = 0
+        if cache.enabled and len(prompt_system) >= cache.min_chars:
+            cached_content_name, cache_creation = await get_or_create_cached_content(
+                client=self.http_client.client,
                 model=meta.model,
                 system_prompt=prompt_system,
-                api_token=api_token,
             )
 
         request = GeminiChatRequestSchema(
@@ -42,10 +42,12 @@ class GeminiLLMClient(LLMClientProtocol):
         )
         response = await self.http_client.chat(request)
         cache_read = response.usage.cached_content_token_count or 0
+        prompt_tokens = max((response.usage.prompt_tokens or 0) - cache_read, 0)
         return ChatResultSchema(
             text=response.first_text,
             total_tokens=response.usage.total_tokens,
-            prompt_tokens=response.usage.prompt_tokens,
+            prompt_tokens=prompt_tokens,
             completion_tokens=response.usage.completion_tokens,
+            cache_creation_tokens=cache_creation,
             cache_read_tokens=cache_read,
         )

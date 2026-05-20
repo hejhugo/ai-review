@@ -21,7 +21,10 @@ class CostService(CostServiceProtocol):
             logger.warning(f"No pricing found for {model=}, skipping cost calculation")
             return None
 
-        input_cost = result.prompt_tokens * pricing.input
+        base_input_cost = result.prompt_tokens * pricing.input
+        cache_creation_cost = result.cache_creation_tokens * pricing.cache_creation_rate
+        cache_read_cost = result.cache_read_tokens * pricing.cache_read_rate
+        input_cost = base_input_cost + cache_creation_cost + cache_read_cost
         output_cost = result.completion_tokens * pricing.output
         total_cost = input_cost + output_cost
 

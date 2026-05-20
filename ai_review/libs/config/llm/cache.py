@@ -1,8 +1,8 @@
 from pydantic import BaseModel
 
-DEFAULT_MIN_TOKENS = 1024
+DEFAULT_MIN_CHARS = 4096
 
 
 class LLMCacheConfig(BaseModel):
     enabled: bool = False
-    min_tokens: int = DEFAULT_MIN_TOKENS
+    min_chars: int = DEFAULT_MIN_CHARS

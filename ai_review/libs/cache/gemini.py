@@ -1,112 +1,104 @@
 """Gemini explicit prompt caching.
 
-When caching is enabled and the system prompt is large enough (>= provider
-floor of roughly 32 768 tokens), this module looks up or creates a
-``cachedContent`` resource via the Gemini REST API and returns its resource
-name for use in the generation request.
+When caching is enabled and the system prompt is large enough to clear the
+Gemini provider floor (~32K tokens, estimated as char_count / 4), this
+module creates a ``cachedContent`` resource via the Gemini REST API and
+returns its resource name.
 
-If the system prompt is below the floor, or if any API call fails, the
-function returns ``None`` so the caller falls back to a normal (uncached)
-request — no error is raised.
+Within a single process, the (model, system_prompt) mapping is kept in
+memory. This matches the intended scope -- inline/context/summary stages
+share a system prompt within one run -- and avoids relying on the
+``cachedContents.list`` endpoint, which does not support server-side
+filtering in ``v1beta`` and can return duplicates under pagination.
 
-The token floor is estimated cheaply as ``len(text) // 4``.  This is a
-deliberate under-estimate; the real tokeniser would be more accurate, but
-adding a tokeniser dependency just to gate caching is not worth it.  If the
-estimate is wrong the Gemini API will return a 400 and we handle that by
-returning ``None``.
+If the prompt is below the floor or any API call fails, the function
+returns ``None`` so the caller falls back to a normal (uncached) request.
+
+The cache key is ``sha256(f"{model}:{system_prompt}")`` so that
+model-bound resources never alias across models.
 """
 
 from __future__ import annotations
 
 import hashlib
-import json
-import urllib.error
-import urllib.request
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    pass
+import httpx
 
-GEMINI_CACHE_API = "https://generativelanguage.googleapis.com/v1beta/cachedContents"
+from ai_review.libs.logger import get_logger
+
+GEMINI_CACHE_PATH = "/v1beta/cachedContents"
 GEMINI_TOKEN_FLOOR = 32_768
 CHARS_PER_TOKEN_ESTIMATE = 4
+DEFAULT_TTL = "3600s"
+
+logger = get_logger("GEMINI_CACHE")
+
+_cache_name_by_key: dict[str, str] = {}
+_cache_creation_tokens_by_key: dict[str, int] = {}
 
 
 def _estimate_tokens(text: str) -> int:
     return len(text) // CHARS_PER_TOKEN_ESTIMATE
 
 
-def _cache_key(system_prompt: str) -> str:
-    return hashlib.sha256(system_prompt.encode("utf-8")).hexdigest()
+def _cache_key(model: str, system_prompt: str) -> str:
+    payload = f"{model}:{system_prompt}".encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
-def _api_request(url: str, method: str, body: dict | None, api_token: str) -> dict | None:
-    data = json.dumps(body).encode("utf-8") if body is not None else None
-    req = urllib.request.Request(
-        url,
-        data=data,
-        method=method,
-        headers={
-            "Content-Type": "application/json",
-            "x-goog-api-key": api_token,
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as exc:
-        if exc.code == 400:
-            return None
-        return None
-    except Exception:
-        return None
+def _reset_cache_state() -> None:
+    """Clear in-process cache map. Test-only helper."""
+    _cache_name_by_key.clear()
+    _cache_creation_tokens_by_key.clear()
 
 
-def get_or_create_cached_content(
+async def get_or_create_cached_content(
+    client: httpx.AsyncClient,
     model: str,
     system_prompt: str,
-    api_token: str,
-) -> str | None:
-    """Return the ``cachedContent`` resource name, or ``None`` if unavailable.
+) -> tuple[str | None, int]:
+    """Return ``(cached_content_name, cache_creation_tokens)``.
 
-    Returns ``None`` when:
-    - Estimated token count is below ``GEMINI_TOKEN_FLOOR``
-    - Any network or API error occurs
-    - The provider returns a 400 (e.g. model does not support caching)
+    ``cached_content_name`` is ``None`` when caching is unavailable:
+    - The estimated token count is below ``GEMINI_TOKEN_FLOOR``
+    - The Gemini API rejects or fails the create request
+
+    ``cache_creation_tokens`` is the token count reported by Gemini at the
+    moment a new cache entry is created (and ``0`` on cache hits or
+    failures).
     """
     if _estimate_tokens(system_prompt) < GEMINI_TOKEN_FLOOR:
-        return None
+        return None, 0
 
-    display_name = _cache_key(system_prompt)
-
-    list_resp = _api_request(
-        f"{GEMINI_CACHE_API}?filter=display_name%3D{display_name}",
-        "GET",
-        None,
-        api_token,
-    )
-    if list_resp:
-        for item in list_resp.get("cachedContents", []):
-            if item.get("displayName") == display_name:
-                return item.get("name")
+    key = _cache_key(model, system_prompt)
+    if key in _cache_name_by_key:
+        return _cache_name_by_key[key], 0
 
     body = {
         "model": f"models/{model}",
-        "displayName": display_name,
-        "contents": [
-            {
-                "role": "user",
-                "parts": [{"text": "(cache warm-up — discard this content)"}],
-            }
-        ],
+        "displayName": key,
         "systemInstruction": {
             "role": "user",
             "parts": [{"text": system_prompt}],
         },
-        "ttl": "3600s",
+        "ttl": DEFAULT_TTL,
     }
-    create_resp = _api_request(GEMINI_CACHE_API, "POST", body, api_token)
-    if create_resp:
-        return create_resp.get("name")
 
-    return None
+    try:
+        response = await client.post(GEMINI_CACHE_PATH, json=body)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning(f"Gemini cache create failed: {exc!r}; falling back to uncached")
+        return None, 0
+
+    payload = response.json()
+    cached_name = payload.get("name")
+    if not cached_name:
+        return None, 0
+
+    usage = payload.get("usageMetadata") or {}
+    creation_tokens = int(usage.get("totalTokenCount") or 0)
+
+    _cache_name_by_key[key] = cached_name
+    _cache_creation_tokens_by_key[key] = creation_tokens
+    return cached_name, creation_tokens

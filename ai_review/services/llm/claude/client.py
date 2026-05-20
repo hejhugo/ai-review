@@ -11,7 +11,7 @@ from ai_review.services.llm.types import LLMClientProtocol, ChatResultSchema
 
 def _build_system(prompt_system: str) -> str | list[ClaudeSystemBlockSchema]:
     cache = settings.llm.cache
-    if not cache.enabled or len(prompt_system) < cache.min_tokens:
+    if not cache.enabled or len(prompt_system) < cache.min_chars:
         return prompt_system
 
     return [ClaudeSystemBlockSchema(

@@ -290,17 +290,28 @@ Enable it with two environment variables:
 | Variable | Default | Description |
 |---|---|---|
 | `LLM__CACHE__ENABLED` | `false` | Set to `true` to enable caching. |
-| `LLM__CACHE__MIN_TOKENS` | `1024` | Minimum character count for the system prompt before caching is applied. Prevents caching on tiny prompts. |
+| `LLM__CACHE__MIN_CHARS` | `4096` | Minimum system-prompt **character** count before caching is applied (~1024 tokens at ~4 chars/token). Prevents caching on tiny prompts that would never clear provider floors. |
 
 **Per-provider behaviour (only when enabled and prefix meets the floor):**
 
 - **Anthropic (Claude):** stamps the last system block with `cache_control: {type: "ephemeral"}`. The 5-minute ephemeral TTL covers any multi-stage run.
-- **OpenAI (Responses API):** passes the system prompt via `instructions`. The Responses API applies prefix caching automatically when the same prefix is reused within a session.
-- **Gemini:** uses `cachedContent` when the system prompt is at or above the provider minimum (roughly 32 768 tokens for Gemini Pro). Below that threshold the call falls back gracefully to an uncached request — no error is raised.
+- **OpenAI (Responses API):** moves the system prompt from the `input` array into the `instructions` field; cached input tokens are subtracted from `prompt_tokens` so cost reports don't double-count them.
+- **Gemini:** creates a `cachedContent` resource via REST and reuses it for subsequent calls in the same process. Caches are model-bound (the cache key includes the model name). Below the provider floor (~32 768 tokens for Gemini Pro) caching is a no-op.
 
-With `LLM__CACHE__ENABLED=false` (the default), behaviour is byte-identical to previous versions for every user.
+With `LLM__CACHE__ENABLED=false` (the default), behaviour is byte-identical to previous versions for every user across all providers.
 
-Cache hit and miss counts are reported in the existing cost-artifact output, alongside prompt and completion tokens.
+### Pricing for cache tokens
+
+`LLMPricingConfig` exposes two optional fields to price cache I/O separately from base input:
+
+| Pricing field | Default | Notes |
+|---|---|---|
+| `cache_creation_input` | `= input` | Anthropic charges ~1.25x base input for cache-creation tokens. |
+| `cache_read_input` | `= input` | Anthropic ~0.1x, OpenAI ~0.5x — provider- and model-specific. |
+
+When unset, cache tokens are priced at the same rate as base input (conservative — never under-reports). For accurate Anthropic numbers, set both fields per model in your override pricing file.
+
+Cache hit / miss counts and cached-token totals are reported in the existing cost-artifact output, alongside prompt and completion tokens.
 
 ---
 

@@ -32,20 +32,37 @@ class OpenAILLMClient(LLMClientProtocol):
         )
 
     async def chat_v2(self, prompt: str, prompt_system: str) -> ChatResultSchema:
-        request = OpenAIResponsesRequestSchema(
-            model=self.meta.model,
-            instructions=prompt_system,
-            input=[OpenAIInputMessageSchema(role="user", content=prompt)],
-            temperature=self.meta.temperature,
-            max_output_tokens=self.meta.max_tokens,
-        )
+        cache = settings.llm.cache
+        use_instructions = cache.enabled and len(prompt_system) >= cache.min_chars
+
+        if use_instructions:
+            request = OpenAIResponsesRequestSchema(
+                model=self.meta.model,
+                instructions=prompt_system,
+                input=[OpenAIInputMessageSchema(role="user", content=prompt)],
+                temperature=self.meta.temperature,
+                max_output_tokens=self.meta.max_tokens,
+            )
+        else:
+            request = OpenAIResponsesRequestSchema(
+                model=self.meta.model,
+                input=[
+                    OpenAIInputMessageSchema(role="system", content=prompt_system),
+                    OpenAIInputMessageSchema(role="user", content=prompt),
+                ],
+                temperature=self.meta.temperature,
+                max_output_tokens=self.meta.max_tokens,
+            )
+
         response = await self.http_client_v2.chat(request)
+        cache_read = response.usage.cached_tokens if use_instructions else 0
+        prompt_tokens = max(response.usage.input_tokens - cache_read, 0)
         return ChatResultSchema(
             text=response.first_text,
             total_tokens=response.usage.total_tokens,
-            prompt_tokens=response.usage.input_tokens,
+            prompt_tokens=prompt_tokens,
             completion_tokens=response.usage.output_tokens,
-            cache_read_tokens=response.usage.cached_tokens,
+            cache_read_tokens=cache_read,
         )
 
     async def chat(self, prompt: str, prompt_system: str) -> ChatResultSchema:

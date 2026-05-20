@@ -19,6 +19,16 @@ from ai_review.libs.resources import load_resource
 class LLMPricingConfig(BaseModel):
     input: float
     output: float
+    cache_creation_input: float | None = None
+    cache_read_input: float | None = None
+
+    @property
+    def cache_creation_rate(self) -> float:
+        return self.cache_creation_input if self.cache_creation_input is not None else self.input
+
+    @property
+    def cache_read_rate(self) -> float:
+        return self.cache_read_input if self.cache_read_input is not None else self.input
 
 
 class LLMConfigBase(BaseModel):

@@ -1,4 +1,4 @@
-from typing import Literal, Any
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -29,11 +29,6 @@ class ClaudeChatRequestSchema(BaseModel):
 class ClaudeContentSchema(BaseModel):
     type: Literal["text"]
     text: str
-
-
-class ClaudeCacheUsageSchema(BaseModel):
-    cache_creation_input_tokens: int = 0
-    cache_read_input_tokens: int = 0
 
 
 class ClaudeUsageSchema(BaseModel):
