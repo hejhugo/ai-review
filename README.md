@@ -309,7 +309,7 @@ With `LLM__CACHE__ENABLED=false` (the default), behaviour is byte-identical to p
 | `cache_creation_input` | `= input` | Anthropic charges ~1.25x base input for cache-creation tokens. |
 | `cache_read_input` | `= input` | Anthropic ~0.1x, OpenAI ~0.5x — provider- and model-specific. |
 
-When unset, cache tokens are priced at the same rate as base input (conservative — never under-reports). For accurate Anthropic numbers, set both fields per model in your override pricing file.
+The shipped `pricing.yaml` already includes accurate `cache_creation_input` (~1.25x) and `cache_read_input` (~0.1x) for every Claude model. If you add a custom model entry without these fields, cache tokens fall back to the base `input` rate — this is **not** conservative for Anthropic (it under-reports cache-creation cost by ~20%), so set both fields per model when you customise pricing.
 
 Cache hit / miss counts and cached-token totals are reported in the existing cost-artifact output, alongside prompt and completion tokens.
 

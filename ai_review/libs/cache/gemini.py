@@ -20,6 +20,7 @@ model-bound resources never alias across models.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 
 import httpx
@@ -35,6 +36,7 @@ logger = get_logger("GEMINI_CACHE")
 
 _cache_name_by_key: dict[str, str] = {}
 _cache_creation_tokens_by_key: dict[str, int] = {}
+_creation_locks: dict[str, asyncio.Lock] = {}
 
 
 def _estimate_tokens(text: str) -> int:
@@ -50,6 +52,7 @@ def _reset_cache_state() -> None:
     """Clear in-process cache map. Test-only helper."""
     _cache_name_by_key.clear()
     _cache_creation_tokens_by_key.clear()
+    _creation_locks.clear()
 
 
 async def get_or_create_cached_content(
@@ -74,31 +77,39 @@ async def get_or_create_cached_content(
     if key in _cache_name_by_key:
         return _cache_name_by_key[key], 0
 
-    body = {
-        "model": f"models/{model}",
-        "displayName": key,
-        "systemInstruction": {
-            "role": "user",
-            "parts": [{"text": system_prompt}],
-        },
-        "ttl": DEFAULT_TTL,
-    }
+    lock = _creation_locks.setdefault(key, asyncio.Lock())
+    async with lock:
+        # Re-check after acquiring the lock: a concurrent caller may have
+        # finished the POST while we were waiting, so the cache entry is
+        # already populated.
+        if key in _cache_name_by_key:
+            return _cache_name_by_key[key], 0
 
-    try:
-        response = await client.post(GEMINI_CACHE_PATH, json=body)
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        logger.warning(f"Gemini cache create failed: {exc!r}; falling back to uncached")
-        return None, 0
+        body = {
+            "model": f"models/{model}",
+            "displayName": key,
+            "systemInstruction": {
+                "role": "user",
+                "parts": [{"text": system_prompt}],
+            },
+            "ttl": DEFAULT_TTL,
+        }
 
-    payload = response.json()
-    cached_name = payload.get("name")
-    if not cached_name:
-        return None, 0
+        try:
+            response = await client.post(GEMINI_CACHE_PATH, json=body)
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.warning(f"Gemini cache create failed: {exc!r}; falling back to uncached")
+            return None, 0
 
-    usage = payload.get("usageMetadata") or {}
-    creation_tokens = int(usage.get("totalTokenCount") or 0)
+        payload = response.json()
+        cached_name = payload.get("name")
+        if not cached_name:
+            return None, 0
 
-    _cache_name_by_key[key] = cached_name
-    _cache_creation_tokens_by_key[key] = creation_tokens
-    return cached_name, creation_tokens
+        usage = payload.get("usageMetadata") or {}
+        creation_tokens = int(usage.get("totalTokenCount") or 0)
+
+        _cache_name_by_key[key] = cached_name
+        _cache_creation_tokens_by_key[key] = creation_tokens
+        return cached_name, creation_tokens

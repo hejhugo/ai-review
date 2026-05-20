@@ -55,7 +55,11 @@ class OpenAILLMClient(LLMClientProtocol):
             )
 
         response = await self.http_client_v2.chat(request)
-        cache_read = response.usage.cached_tokens if use_instructions else 0
+        # OpenAI's Responses API automatically caches any prefix >= 1024
+        # tokens, regardless of whether `instructions` is used. Always
+        # report the cached_tokens it returns so cost math reflects real
+        # savings even when the opt-in caching path is disabled.
+        cache_read = response.usage.cached_tokens
         prompt_tokens = max(response.usage.input_tokens - cache_read, 0)
         return ChatResultSchema(
             text=response.first_text,

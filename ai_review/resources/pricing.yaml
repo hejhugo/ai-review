@@ -67,33 +67,50 @@ gemini-2.5-pro-long-context:
   output: 12.00e-6
 
 # --- Anthropic Claude ---
+# Anthropic bills 5-minute prompt cache writes at ~1.25x base input and
+# cache reads at ~0.1x base input. Shipped here so default cost reports
+# are accurate when LLM__CACHE__ENABLED=true.
 claude-3-haiku:
   input: 0.22e-6
   output: 1.10e-6
+  cache_creation_input: 0.275e-6
+  cache_read_input: 0.022e-6
 
 claude-haiku-4-5:
   input: 0.90e-6
   output: 4.50e-6
+  cache_creation_input: 1.125e-6
+  cache_read_input: 0.090e-6
 
 claude-3-sonnet:
   input: 2.80e-6
   output: 14.00e-6
+  cache_creation_input: 3.500e-6
+  cache_read_input: 0.280e-6
 
 claude-3.5-sonnet:
   input: 2.80e-6
   output: 14.00e-6
+  cache_creation_input: 3.500e-6
+  cache_read_input: 0.280e-6
 
 claude-opus-4-5:
   input: 4.50e-6
   output: 22.50e-6
+  cache_creation_input: 5.625e-6
+  cache_read_input: 0.450e-6
 
 claude-opus-4-6:
   input: 4.50e-6
   output: 22.50e-6
+  cache_creation_input: 5.625e-6
+  cache_read_input: 0.450e-6
 
 claude-3-opus:
   input: 14.00e-6
   output: 70.00e-6
+  cache_creation_input: 17.500e-6
+  cache_read_input: 1.400e-6
 
 # --- OpenRouter ---
 o3-mini:

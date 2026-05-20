@@ -11,6 +11,7 @@ Covers:
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import httpx
@@ -240,6 +241,39 @@ class TestOpenAIDefaultOffParity:
         assert result.prompt_tokens == 80
         assert result.cache_read_tokens == 120
 
+    @pytest.mark.asyncio
+    async def test_automatic_cache_hits_reported_when_feature_disabled(self, monkeypatch):
+        # OpenAI auto-caches any prefix >= 1024 tokens regardless of the
+        # `instructions` field. The client must report cached_tokens even
+        # when LLM__CACHE__ENABLED=false so cost math doesn't ignore the
+        # discount.
+        make_openai_v2_config(cache_enabled=False, monkeypatch=monkeypatch)
+        fake = _FakeOpenAIV2Client(
+            usage_kwargs={
+                "total_tokens": 300,
+                "input_tokens": 250,
+                "output_tokens": 50,
+                "input_tokens_details": OpenAIInputTokensDetailsSchema(cached_tokens=180),
+            }
+        )
+        monkeypatch.setattr(
+            "ai_review.services.llm.openai.client.get_openai_v2_http_client",
+            lambda: fake,
+        )
+        monkeypatch.setattr(
+            "ai_review.services.llm.openai.client.get_openai_v1_http_client",
+            lambda: object(),
+        )
+        client = OpenAILLMClient()
+        result = await client.chat("user prompt", "system prompt")
+
+        request = fake.requests[0]
+        # Request shape still byte-identical: system stays in input array.
+        assert request.instructions is None
+        # But cached_tokens are picked up from the response and accounted.
+        assert result.cache_read_tokens == 180
+        assert result.prompt_tokens == 70
+
 
 class TestGeminiCacheLib:
     def setup_method(self) -> None:
@@ -306,6 +340,43 @@ class TestGeminiCacheLib:
 
         assert name_pro == "cachedContents/pro"
         assert name_flash == "cachedContents/flash"
+
+    @pytest.mark.asyncio
+    async def test_concurrent_callers_dedupe_to_single_post(self):
+        # Multi-stage runs fire `asyncio.gather(inline, context, summary)`,
+        # all sharing the same system prompt. The cache helper must serialise
+        # them so only one cache-creation POST hits Gemini.
+        prompt = "x" * GEMINI_FLOOR_CHARS
+        calls: list[httpx.Request] = []
+        gate = asyncio.Event()
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(request)
+            # Block the first POST long enough for the other coroutines to
+            # reach the cache helper and observe the in-flight key.
+            await gate.wait()
+            return httpx.Response(
+                200,
+                json={"name": "cachedContents/raced", "usageMetadata": {"totalTokenCount": 33000}},
+            )
+
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport, base_url="https://example.test") as client:
+            tasks = [
+                asyncio.create_task(get_or_create_cached_content(client, "gemini-2.5-pro", prompt))
+                for _ in range(3)
+            ]
+            # Yield so all three coroutines reach the lock.
+            await asyncio.sleep(0)
+            gate.set()
+            results = await asyncio.gather(*tasks)
+
+        assert len(calls) == 1
+        names = {name for name, _ in results}
+        assert names == {"cachedContents/raced"}
+        creations = sorted(creation for _, creation in results)
+        # Exactly one caller saw the creation tokens; the other two were hits.
+        assert creations == [0, 0, 33000]
 
     @pytest.mark.asyncio
     async def test_http_error_returns_none_no_cache_stored(self):
