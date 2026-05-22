@@ -5,6 +5,7 @@ from ai_review.clients.openrouter.schema import (
 )
 from ai_review.config import settings
 from ai_review.services.llm.types import LLMClientProtocol, ChatResultSchema
+from ai_review.services.prompt.schema import strip_system_prompt_boundary
 
 
 class OpenRouterLLMClient(LLMClientProtocol):
@@ -12,6 +13,7 @@ class OpenRouterLLMClient(LLMClientProtocol):
         self.http_client = get_openrouter_http_client()
 
     async def chat(self, prompt: str, prompt_system: str) -> ChatResultSchema:
+        prompt_system = strip_system_prompt_boundary(prompt_system)
         meta = settings.llm.meta
         request = OpenRouterChatRequestSchema(
             model=meta.model,

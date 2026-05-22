@@ -1,7 +1,11 @@
 from ai_review.config import settings
 from ai_review.services.agent.loop.schema import AgentTraceSchema
 from ai_review.services.diff.schema import DiffFileSchema
-from ai_review.services.prompt.schema import PromptContextSchema
+from ai_review.services.prompt.schema import (
+    SYSTEM_PROMPT_CACHE_BOUNDARY,
+    PromptContextSchema,
+    strip_system_prompt_boundary,
+)
 from ai_review.services.prompt.tools import (
     format_file,
     format_files,
@@ -25,6 +29,20 @@ class PromptService(PromptServiceProtocol):
         return prompt
 
     @classmethod
+    def prepare_system_prompt(
+            cls,
+            parts: tuple[list[str], list[str]],
+            context: PromptContextSchema,
+    ) -> str:
+        prefix_prompts, variable_prompts = parts
+        prefix = cls.prepare_prompt(prefix_prompts, context) if prefix_prompts else ""
+        variable = cls.prepare_prompt(variable_prompts, context) if variable_prompts else ""
+
+        if prefix and variable:
+            return f"{prefix}{SYSTEM_PROMPT_CACHE_BOUNDARY}{variable}"
+        return prefix or variable
+
+    @classmethod
     def build_agent_request(
             cls,
             traces: list[AgentTraceSchema],
@@ -35,6 +53,7 @@ class PromptService(PromptServiceProtocol):
         mode = "Return FINAL only." if force_final else "You can either call a tool or return FINAL."
         history = format_traces(traces)
         agent_prompt = cls.prepare_prompt(settings.prompt.load_agent(), PromptContextSchema())
+        original_prompt_system = strip_system_prompt_boundary(original_prompt_system)
 
         return (
             f"{agent_prompt}\n\n"
@@ -112,24 +131,24 @@ class PromptService(PromptServiceProtocol):
 
     @classmethod
     def build_system_agent_request(cls) -> str:
-        return cls.prepare_prompt(settings.prompt.load_system_agent(), PromptContextSchema())
+        return cls.prepare_system_prompt(settings.prompt.load_system_agent(), PromptContextSchema())
 
     @classmethod
     def build_system_inline_request(cls, context: PromptContextSchema) -> str:
-        return cls.prepare_prompt(settings.prompt.load_system_inline(), context)
+        return cls.prepare_system_prompt(settings.prompt.load_system_inline(), context)
 
     @classmethod
     def build_system_context_request(cls, context: PromptContextSchema) -> str:
-        return cls.prepare_prompt(settings.prompt.load_system_context(), context)
+        return cls.prepare_system_prompt(settings.prompt.load_system_context(), context)
 
     @classmethod
     def build_system_summary_request(cls, context: PromptContextSchema) -> str:
-        return cls.prepare_prompt(settings.prompt.load_system_summary(), context)
+        return cls.prepare_system_prompt(settings.prompt.load_system_summary(), context)
 
     @classmethod
     def build_system_inline_reply_request(cls, context: PromptContextSchema) -> str:
-        return cls.prepare_prompt(settings.prompt.load_system_inline_reply(), context)
+        return cls.prepare_system_prompt(settings.prompt.load_system_inline_reply(), context)
 
     @classmethod
     def build_system_summary_reply_request(cls, context: PromptContextSchema) -> str:
-        return cls.prepare_prompt(settings.prompt.load_system_summary_reply(), context)
+        return cls.prepare_system_prompt(settings.prompt.load_system_summary_reply(), context)

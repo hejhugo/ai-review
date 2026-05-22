@@ -103,19 +103,22 @@ def fake_prompts(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(PromptConfig, "load_summary", lambda self: ["GLOBAL_SUMMARY", "SUMMARY_PROMPT"])
     monkeypatch.setattr(PromptConfig, "load_inline_reply", lambda self: ["INLINE_REPLY_A", "INLINE_REPLY_B"])
     monkeypatch.setattr(PromptConfig, "load_summary_reply", lambda self: ["SUMMARY_REPLY_A", "SUMMARY_REPLY_B"])
-    monkeypatch.setattr(PromptConfig, "load_system_agent", lambda self: ["SYS_AGENT_A", "SYS_AGENT_B"])
-    monkeypatch.setattr(PromptConfig, "load_system_inline", lambda self: ["SYS_INLINE_A", "SYS_INLINE_B"])
-    monkeypatch.setattr(PromptConfig, "load_system_context", lambda self: ["SYS_CONTEXT_A", "SYS_CONTEXT_B"])
-    monkeypatch.setattr(PromptConfig, "load_system_summary", lambda self: ["SYS_SUMMARY_A", "SYS_SUMMARY_B"])
+    # System prompts return (prefix_prompts, variable_prompts) tuples. With no
+    # cached prefix, the variable bucket holds the whole prompt and no boundary
+    # marker is emitted.
+    monkeypatch.setattr(PromptConfig, "load_system_agent", lambda self: ([], ["SYS_AGENT_A", "SYS_AGENT_B"]))
+    monkeypatch.setattr(PromptConfig, "load_system_inline", lambda self: ([], ["SYS_INLINE_A", "SYS_INLINE_B"]))
+    monkeypatch.setattr(PromptConfig, "load_system_context", lambda self: ([], ["SYS_CONTEXT_A", "SYS_CONTEXT_B"]))
+    monkeypatch.setattr(PromptConfig, "load_system_summary", lambda self: ([], ["SYS_SUMMARY_A", "SYS_SUMMARY_B"]))
     monkeypatch.setattr(
         PromptConfig,
         "load_system_inline_reply",
-        lambda self: ["SYS_INLINE_REPLY_A", "SYS_INLINE_REPLY_B"]
+        lambda self: ([], ["SYS_INLINE_REPLY_A", "SYS_INLINE_REPLY_B"])
     )
     monkeypatch.setattr(
         PromptConfig,
         "load_system_summary_reply",
-        lambda self: ["SYS_SUMMARY_REPLY_A", "SYS_SUMMARY_REPLY_B"]
+        lambda self: ([], ["SYS_SUMMARY_REPLY_A", "SYS_SUMMARY_REPLY_B"])
     )
 
 

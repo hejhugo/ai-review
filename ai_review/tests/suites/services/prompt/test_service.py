@@ -87,7 +87,7 @@ def test_build_system_inline_request_empty(
         monkeypatch: pytest.MonkeyPatch,
         fake_prompt_context: PromptContextSchema
 ) -> None:
-    monkeypatch.setattr(PromptConfig, "load_system_inline", lambda self: [])
+    monkeypatch.setattr(PromptConfig, "load_system_inline", lambda self: ([], []))
     result = PromptService.build_system_inline_request(fake_prompt_context)
     assert result == ""
 
@@ -97,7 +97,7 @@ def test_build_system_context_request_empty(
         monkeypatch: pytest.MonkeyPatch,
         fake_prompt_context: PromptContextSchema
 ) -> None:
-    monkeypatch.setattr(PromptConfig, "load_system_context", lambda self: [])
+    monkeypatch.setattr(PromptConfig, "load_system_context", lambda self: ([], []))
     result = PromptService.build_system_context_request(fake_prompt_context)
     assert result == ""
 
@@ -107,7 +107,7 @@ def test_build_system_summary_request_empty(
         monkeypatch: pytest.MonkeyPatch,
         fake_prompt_context: PromptContextSchema
 ) -> None:
-    monkeypatch.setattr(PromptConfig, "load_system_summary", lambda self: [])
+    monkeypatch.setattr(PromptConfig, "load_system_summary", lambda self: ([], []))
     result = PromptService.build_system_summary_request(fake_prompt_context)
     assert result == ""
 

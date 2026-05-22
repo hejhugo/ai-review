@@ -2,6 +2,7 @@ from ai_review.clients.ollama.client import get_ollama_http_client
 from ai_review.clients.ollama.schema import OllamaChatRequestSchema, OllamaMessageSchema, OllamaOptionsSchema
 from ai_review.config import settings
 from ai_review.services.llm.types import LLMClientProtocol, ChatResultSchema
+from ai_review.services.prompt.schema import strip_system_prompt_boundary
 
 
 class OllamaLLMClient(LLMClientProtocol):
@@ -9,6 +10,7 @@ class OllamaLLMClient(LLMClientProtocol):
         self.http_client = get_ollama_http_client()
 
     async def chat(self, prompt: str, prompt_system: str) -> ChatResultSchema:
+        prompt_system = strip_system_prompt_boundary(prompt_system)
         meta = settings.llm.meta
         request = OllamaChatRequestSchema(
             model=meta.model,

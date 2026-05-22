@@ -30,7 +30,8 @@ def test_resolve_system_prompt_files_none_returns_global(monkeypatch: pytest.Mon
     monkeypatch.setattr("ai_review.libs.config.prompt.load_resource", lambda **_: dummy_file)
 
     result = resolve_system_prompt_files(None, include=True, default_file="default_system_inline.md")
-    assert result == [dummy_file]
+    # No user files -> empty prefix bucket, default goes to variable bucket.
+    assert result == ([], [dummy_file])
 
 
 def test_resolve_system_prompt_files_include_true(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -40,7 +41,8 @@ def test_resolve_system_prompt_files_include_true(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr("ai_review.libs.config.prompt.load_resource", lambda **_: global_file)
 
     result = resolve_system_prompt_files([custom_file], include=True, default_file="default_system_inline.md")
-    assert result == [global_file, custom_file]
+    # User files are the cacheable prefix, default file is the variable suffix.
+    assert result == ([custom_file], [global_file])
 
 
 def test_resolve_system_prompt_files_include_false(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -50,7 +52,9 @@ def test_resolve_system_prompt_files_include_false(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr("ai_review.libs.config.prompt.load_resource", lambda **_: global_file)
 
     result = resolve_system_prompt_files([custom_file], include=False, default_file="default_system_inline.md")
-    assert result == [custom_file]
+    # When the default is excluded, user files still act as cacheable prefix
+    # and the variable bucket is empty.
+    assert result == ([custom_file], [])
 
 
 # ---------- Prompts ---------
@@ -124,8 +128,8 @@ def test_load_system_context_prompts(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     monkeypatch.setattr("ai_review.libs.config.prompt.load_resource", lambda **_: dummy_file)
 
     config = PromptConfig()
-    assert config.system_context_prompt_files_or_default == [dummy_file]
-    assert config.load_system_context() == ["SYS_CTX"]
+    assert config.system_context_prompt_files_or_default == ([], [dummy_file])
+    assert config.load_system_context() == ([], ["SYS_CTX"])
 
 
 def test_load_system_summary_prompts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -134,8 +138,8 @@ def test_load_system_summary_prompts(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     monkeypatch.setattr("ai_review.libs.config.prompt.load_resource", lambda **_: dummy_file)
 
     config = PromptConfig()
-    assert config.system_summary_prompt_files_or_default == [dummy_file]
-    assert config.load_system_summary() == ["SYS_SUM"]
+    assert config.system_summary_prompt_files_or_default == ([], [dummy_file])
+    assert config.load_system_summary() == ([], ["SYS_SUM"])
 
 
 def test_load_system_inline_reply_prompts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -144,8 +148,8 @@ def test_load_system_inline_reply_prompts(monkeypatch: pytest.MonkeyPatch, tmp_p
     monkeypatch.setattr("ai_review.libs.config.prompt.load_resource", lambda **_: dummy_file)
 
     config = PromptConfig()
-    assert config.system_inline_reply_prompt_files_or_default == [dummy_file]
-    assert config.load_system_inline_reply() == ["SYS_IR"]
+    assert config.system_inline_reply_prompt_files_or_default == ([], [dummy_file])
+    assert config.load_system_inline_reply() == ([], ["SYS_IR"])
 
 
 def test_load_system_summary_reply_prompts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -154,8 +158,8 @@ def test_load_system_summary_reply_prompts(monkeypatch: pytest.MonkeyPatch, tmp_
     monkeypatch.setattr("ai_review.libs.config.prompt.load_resource", lambda **_: dummy_file)
 
     config = PromptConfig()
-    assert config.system_summary_reply_prompt_files_or_default == [dummy_file]
-    assert config.load_system_summary_reply() == ["SYS_SR"]
+    assert config.system_summary_reply_prompt_files_or_default == ([], [dummy_file])
+    assert config.load_system_summary_reply() == ([], ["SYS_SR"])
 
 
 def test_load_system_agent_prompts_default(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -164,8 +168,8 @@ def test_load_system_agent_prompts_default(monkeypatch: pytest.MonkeyPatch, tmp_
     monkeypatch.setattr("ai_review.libs.config.prompt.load_resource", lambda **_: global_file)
 
     config = PromptConfig()
-    assert config.system_agent_prompt_files_or_default == [global_file]
-    assert config.load_system_agent() == ["GLOBAL_SYS_AGENT"]
+    assert config.system_agent_prompt_files_or_default == ([], [global_file])
+    assert config.load_system_agent() == ([], ["GLOBAL_SYS_AGENT"])
 
 
 def test_load_system_agent_prompts_include_true(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -176,8 +180,8 @@ def test_load_system_agent_prompts_include_true(monkeypatch: pytest.MonkeyPatch,
     monkeypatch.setattr("ai_review.libs.config.prompt.load_resource", lambda **_: global_file)
 
     config = PromptConfig(system_agent_prompt_files=[custom_file], include_agent_system_prompts=True)
-    assert config.system_agent_prompt_files_or_default == [global_file, custom_file]
-    assert config.load_system_agent() == ["GLOBAL_SYS_AGENT", "CUSTOM_SYS_AGENT"]
+    assert config.system_agent_prompt_files_or_default == ([custom_file], [global_file])
+    assert config.load_system_agent() == (["CUSTOM_SYS_AGENT"], ["GLOBAL_SYS_AGENT"])
 
 
 def test_load_system_agent_prompts_include_false(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -188,5 +192,5 @@ def test_load_system_agent_prompts_include_false(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr("ai_review.libs.config.prompt.load_resource", lambda **_: global_file)
 
     config = PromptConfig(system_agent_prompt_files=[custom_file], include_agent_system_prompts=False)
-    assert config.system_agent_prompt_files_or_default == [custom_file]
-    assert config.load_system_agent() == ["CUSTOM_SYS_AGENT"]
+    assert config.system_agent_prompt_files_or_default == ([custom_file], [])
+    assert config.load_system_agent() == (["CUSTOM_SYS_AGENT"], [])

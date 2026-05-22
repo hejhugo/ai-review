@@ -3,10 +3,19 @@ from typing import Literal
 from pydantic import BaseModel
 
 
+class OpenAIPromptTokensDetailsSchema(BaseModel):
+    cached_tokens: int = 0
+
+
 class OpenAIUsageSchema(BaseModel):
     total_tokens: int
     prompt_tokens: int
     completion_tokens: int
+    prompt_tokens_details: OpenAIPromptTokensDetailsSchema = OpenAIPromptTokensDetailsSchema()
+
+    @property
+    def cached_tokens(self) -> int:
+        return self.prompt_tokens_details.cached_tokens
 
 
 class OpenAIMessageSchema(BaseModel):

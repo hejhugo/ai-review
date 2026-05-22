@@ -16,8 +16,22 @@ def resolve_prompt_files(files: list[FilePath] | None, default_file: str) -> lis
     ]
 
 
-def resolve_system_prompt_files(files: list[FilePath] | None, include: bool, default_file: str) -> list[Path]:
-    global_files = [
+def resolve_system_prompt_files(
+    files: list[FilePath] | None,
+    include: bool,
+    default_file: str,
+) -> tuple[list[Path], list[Path]]:
+    """Resolve system prompt files into (prefix_files, variable_files).
+
+    prefix_files: user-provided files that are stable across stages and PRs — the
+    cacheable prompt prefix.
+    variable_files: the per-stage default file — the variable suffix that
+    distinguishes inline vs context vs summary.
+
+    Ordering is prefix-first so providers that support prompt caching can mark
+    the cache boundary right after the user files.
+    """
+    default = [
         load_resource(
             package="ai_review.prompts",
             filename=default_file,
@@ -26,12 +40,12 @@ def resolve_system_prompt_files(files: list[FilePath] | None, include: bool, def
     ]
 
     if files is None:
-        return global_files
+        return [], default
 
     if include:
-        return global_files + files
+        return files, default
 
-    return files
+    return files, []
 
 
 class PromptConfig(BaseModel):
@@ -90,7 +104,7 @@ class PromptConfig(BaseModel):
 
     # --- System Prompts ---
     @cached_property
-    def system_agent_prompt_files_or_default(self) -> list[Path]:
+    def system_agent_prompt_files_or_default(self) -> tuple[list[Path], list[Path]]:
         return resolve_system_prompt_files(
             files=self.system_agent_prompt_files,
             include=self.include_agent_system_prompts,
@@ -98,7 +112,7 @@ class PromptConfig(BaseModel):
         )
 
     @cached_property
-    def system_inline_prompt_files_or_default(self) -> list[Path]:
+    def system_inline_prompt_files_or_default(self) -> tuple[list[Path], list[Path]]:
         return resolve_system_prompt_files(
             files=self.system_inline_prompt_files,
             include=self.include_inline_system_prompts,
@@ -106,7 +120,7 @@ class PromptConfig(BaseModel):
         )
 
     @cached_property
-    def system_context_prompt_files_or_default(self) -> list[Path]:
+    def system_context_prompt_files_or_default(self) -> tuple[list[Path], list[Path]]:
         return resolve_system_prompt_files(
             files=self.system_context_prompt_files,
             include=self.include_context_system_prompts,
@@ -114,7 +128,7 @@ class PromptConfig(BaseModel):
         )
 
     @cached_property
-    def system_summary_prompt_files_or_default(self) -> list[Path]:
+    def system_summary_prompt_files_or_default(self) -> tuple[list[Path], list[Path]]:
         return resolve_system_prompt_files(
             files=self.system_summary_prompt_files,
             include=self.include_summary_system_prompts,
@@ -122,7 +136,7 @@ class PromptConfig(BaseModel):
         )
 
     @cached_property
-    def system_inline_reply_prompt_files_or_default(self) -> list[Path]:
+    def system_inline_reply_prompt_files_or_default(self) -> tuple[list[Path], list[Path]]:
         return resolve_system_prompt_files(
             files=self.system_inline_reply_prompt_files,
             include=self.include_inline_reply_system_prompts,
@@ -130,7 +144,7 @@ class PromptConfig(BaseModel):
         )
 
     @cached_property
-    def system_summary_reply_prompt_files_or_default(self) -> list[Path]:
+    def system_summary_reply_prompt_files_or_default(self) -> tuple[list[Path], list[Path]]:
         return resolve_system_prompt_files(
             files=self.system_summary_reply_prompt_files,
             include=self.include_summary_reply_system_prompts,
@@ -157,20 +171,27 @@ class PromptConfig(BaseModel):
         return [file.read_text(encoding="utf-8") for file in self.summary_reply_prompt_files_or_default]
 
     # --- Load System Prompts ---
-    def load_system_agent(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_agent_prompt_files_or_default]
+    @staticmethod
+    def _load_system(files: tuple[list[Path], list[Path]]) -> tuple[list[str], list[str]]:
+        prefix_files, variable_files = files
+        prefix = [file.read_text(encoding="utf-8") for file in prefix_files]
+        variable = [file.read_text(encoding="utf-8") for file in variable_files]
+        return prefix, variable
 
-    def load_system_inline(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_inline_prompt_files_or_default]
+    def load_system_agent(self) -> tuple[list[str], list[str]]:
+        return self._load_system(self.system_agent_prompt_files_or_default)
 
-    def load_system_context(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_context_prompt_files_or_default]
+    def load_system_inline(self) -> tuple[list[str], list[str]]:
+        return self._load_system(self.system_inline_prompt_files_or_default)
 
-    def load_system_summary(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_summary_prompt_files_or_default]
+    def load_system_context(self) -> tuple[list[str], list[str]]:
+        return self._load_system(self.system_context_prompt_files_or_default)
 
-    def load_system_inline_reply(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_inline_reply_prompt_files_or_default]
+    def load_system_summary(self) -> tuple[list[str], list[str]]:
+        return self._load_system(self.system_summary_prompt_files_or_default)
 
-    def load_system_summary_reply(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_summary_reply_prompt_files_or_default]
+    def load_system_inline_reply(self) -> tuple[list[str], list[str]]:
+        return self._load_system(self.system_inline_reply_prompt_files_or_default)
+
+    def load_system_summary_reply(self) -> tuple[list[str], list[str]]:
+        return self._load_system(self.system_summary_reply_prompt_files_or_default)

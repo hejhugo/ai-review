@@ -52,6 +52,8 @@ class AgentTraceSchema(BaseModel):
     total_tokens: int | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    cache_creation_tokens: int | None = None
+    cache_read_tokens: int | None = None
 
     @field_validator("warning", "raw_output", "tool_output")
     def normalize_fields(cls, value: str) -> str:
@@ -74,3 +76,11 @@ class AgentLoopResultSchema(BaseModel):
     @property
     def completion_tokens(self) -> int:
         return sum((trace.completion_tokens or 0) for trace in self.traces)
+
+    @property
+    def cache_creation_tokens(self) -> int:
+        return sum((trace.cache_creation_tokens or 0) for trace in self.traces)
+
+    @property
+    def cache_read_tokens(self) -> int:
+        return sum((trace.cache_read_tokens or 0) for trace in self.traces)

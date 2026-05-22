@@ -5,6 +5,7 @@ from ai_review.services.cost.schema import CalculateCostSchema
 from ai_review.services.cost.types import CostServiceProtocol
 from ai_review.services.hook import hook
 from ai_review.services.llm.types import LLMClientProtocol
+from ai_review.services.prompt.schema import strip_system_prompt_boundary
 from ai_review.services.review.gateway.types import ReviewLLMGatewayProtocol
 
 logger = get_logger("REVIEW_AGENT_LLM_GATEWAY")
@@ -26,8 +27,9 @@ class ReviewAgentLLMGateway(ReviewLLMGatewayProtocol):
         self.fallback_gateway = fallback_gateway
 
     async def ask(self, prompt: str, prompt_system: str) -> str:
+        public_prompt_system = strip_system_prompt_boundary(prompt_system)
         try:
-            await hook.emit_chat_start(prompt, prompt_system)
+            await hook.emit_chat_start(prompt, public_prompt_system)
             loop_result = await self.agent_loop.run(
                 prompt=prompt,
                 prompt_system=prompt_system,
@@ -36,7 +38,9 @@ class ReviewAgentLLMGateway(ReviewLLMGatewayProtocol):
             report = self.cost.calculate(
                 CalculateCostSchema(
                     prompt_tokens=loop_result.prompt_tokens,
-                    completion_tokens=loop_result.completion_tokens
+                    completion_tokens=loop_result.completion_tokens,
+                    cache_creation_tokens=loop_result.cache_creation_tokens,
+                    cache_read_tokens=loop_result.cache_read_tokens,
                 )
             )
             if report:
@@ -47,10 +51,10 @@ class ReviewAgentLLMGateway(ReviewLLMGatewayProtocol):
                 prompt=prompt,
                 response=loop_result.final_text,
                 cost_report=report,
-                prompt_system=prompt_system,
+                prompt_system=public_prompt_system,
             )
             return loop_result.final_text
         except Exception as error:
             logger.exception(f"Agent mode failed, falling back to direct chat: {error}")
-            await hook.emit_chat_error(prompt, prompt_system)
+            await hook.emit_chat_error(prompt, public_prompt_system)
             return await self.fallback_gateway.ask(prompt, prompt_system)

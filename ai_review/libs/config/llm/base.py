@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, FilePath
 
 from ai_review.libs.config.llm.azure_openai import AzureOpenAIHTTPClientConfig, AzureOpenAIMetaConfig
 from ai_review.libs.config.llm.bedrock import BedrockHTTPClientConfig, BedrockMetaConfig
+from ai_review.libs.config.llm.cache import LLMCacheConfig
 from ai_review.libs.config.llm.claude import ClaudeHTTPClientConfig, ClaudeMetaConfig
 from ai_review.libs.config.llm.gemini import GeminiHTTPClientConfig, GeminiMetaConfig
 from ai_review.libs.config.llm.ollama import OllamaHTTPClientConfig, OllamaMetaConfig
@@ -18,11 +19,22 @@ from ai_review.libs.resources import load_resource
 class LLMPricingConfig(BaseModel):
     input: float
     output: float
+    cache_creation_input: float | None = None
+    cache_read_input: float | None = None
+
+    @property
+    def cache_creation_rate(self) -> float:
+        return self.cache_creation_input if self.cache_creation_input is not None else self.input
+
+    @property
+    def cache_read_rate(self) -> float:
+        return self.cache_read_input if self.cache_read_input is not None else self.input
 
 
 class LLMConfigBase(BaseModel):
     provider: LLMProvider
     pricing_file: FilePath | None = None
+    cache: LLMCacheConfig = Field(default_factory=LLMCacheConfig)
 
     @cached_property
     def pricing_file_or_default(self):

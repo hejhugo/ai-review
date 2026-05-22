@@ -50,6 +50,8 @@ class AgentLoopService(AgentLoopServiceProtocol):
                 total_tokens=chat.total_tokens,
                 prompt_tokens=chat.prompt_tokens,
                 completion_tokens=chat.completion_tokens,
+                cache_creation_tokens=chat.cache_creation_tokens,
+                cache_read_tokens=chat.cache_read_tokens,
             )
 
         self.signatures.add(step.command)
@@ -64,6 +66,8 @@ class AgentLoopService(AgentLoopServiceProtocol):
             total_tokens=chat.total_tokens,
             prompt_tokens=chat.prompt_tokens,
             completion_tokens=chat.completion_tokens,
+            cache_creation_tokens=chat.cache_creation_tokens,
+            cache_read_tokens=chat.cache_read_tokens,
         )
 
     async def force_final(
@@ -112,6 +116,8 @@ class AgentLoopService(AgentLoopServiceProtocol):
                 total_tokens=fallback_result.total_tokens,
                 prompt_tokens=fallback_result.prompt_tokens,
                 completion_tokens=fallback_result.completion_tokens,
+                cache_creation_tokens=fallback_result.cache_creation_tokens,
+                cache_read_tokens=fallback_result.cache_read_tokens,
             )
         )
 
@@ -165,6 +171,8 @@ class AgentLoopService(AgentLoopServiceProtocol):
                         total_tokens=result.total_tokens,
                         prompt_tokens=result.prompt_tokens,
                         completion_tokens=result.completion_tokens,
+                        cache_creation_tokens=result.cache_creation_tokens,
+                        cache_read_tokens=result.cache_read_tokens,
                     )
                 )
 
@@ -184,6 +192,8 @@ class AgentLoopService(AgentLoopServiceProtocol):
                         total_tokens=result.total_tokens,
                         prompt_tokens=result.prompt_tokens,
                         completion_tokens=result.completion_tokens,
+                        cache_creation_tokens=result.cache_creation_tokens,
+                        cache_read_tokens=result.cache_read_tokens,
                     )
                 )
 

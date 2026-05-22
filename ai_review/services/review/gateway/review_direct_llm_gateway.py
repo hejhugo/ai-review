@@ -4,6 +4,7 @@ from ai_review.services.cost.schema import CalculateCostSchema
 from ai_review.services.cost.types import CostServiceProtocol
 from ai_review.services.hook import hook
 from ai_review.services.llm.types import LLMClientProtocol
+from ai_review.services.prompt.schema import strip_system_prompt_boundary
 from ai_review.services.review.gateway.types import ReviewLLMGatewayProtocol
 
 logger = get_logger("REVIEW_DIRECT_LLM_GATEWAY")
@@ -21,8 +22,11 @@ class ReviewDirectLLMGateway(ReviewLLMGatewayProtocol):
         self.artifacts = artifacts
 
     async def ask(self, prompt: str, prompt_system: str) -> str:
+        # The boundary marker is an internal routing signal for caching-aware
+        # LLM clients. Hooks and artifacts should see a clean prompt.
+        public_prompt_system = strip_system_prompt_boundary(prompt_system)
         try:
-            await hook.emit_chat_start(prompt, prompt_system)
+            await hook.emit_chat_start(prompt, public_prompt_system)
             result = await self.llm.chat(prompt, prompt_system)
             if not result.text:
                 logger.warning(
@@ -32,7 +36,9 @@ class ReviewDirectLLMGateway(ReviewLLMGatewayProtocol):
             report = self.cost.calculate(
                 CalculateCostSchema(
                     prompt_tokens=result.prompt_tokens,
-                    completion_tokens=result.completion_tokens
+                    completion_tokens=result.completion_tokens,
+                    cache_creation_tokens=result.cache_creation_tokens,
+                    cache_read_tokens=result.cache_read_tokens,
                 )
             )
             if report:
@@ -43,10 +49,10 @@ class ReviewDirectLLMGateway(ReviewLLMGatewayProtocol):
                 prompt=prompt,
                 response=result.text,
                 cost_report=report,
-                prompt_system=prompt_system,
+                prompt_system=public_prompt_system,
             )
 
             return result.text
         except Exception as error:
             logger.exception(f"LLM request failed: {error}")
-            await hook.emit_chat_error(prompt, prompt_system)
+            await hook.emit_chat_error(prompt, public_prompt_system)

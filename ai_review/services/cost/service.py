@@ -21,7 +21,10 @@ class CostService(CostServiceProtocol):
             logger.warning(f"No pricing found for {model=}, skipping cost calculation")
             return None
 
-        input_cost = result.prompt_tokens * pricing.input
+        base_input_cost = result.prompt_tokens * pricing.input
+        cache_creation_cost = result.cache_creation_tokens * pricing.cache_creation_rate
+        cache_read_cost = result.cache_read_tokens * pricing.cache_read_rate
+        input_cost = base_input_cost + cache_creation_cost + cache_read_cost
         output_cost = result.completion_tokens * pricing.output
         total_cost = input_cost + output_cost
 
@@ -32,6 +35,8 @@ class CostService(CostServiceProtocol):
             output_cost=output_cost,
             prompt_tokens=result.prompt_tokens,
             completion_tokens=result.completion_tokens,
+            cache_creation_tokens=result.cache_creation_tokens,
+            cache_read_tokens=result.cache_read_tokens,
         )
 
         self.reports.append(report)
@@ -47,6 +52,8 @@ class CostService(CostServiceProtocol):
         output_cost = sum(report.output_cost for report in self.reports)
         prompt_tokens = sum(report.prompt_tokens for report in self.reports)
         completion_tokens = sum(report.completion_tokens for report in self.reports)
+        cache_creation_tokens = sum(report.cache_creation_tokens for report in self.reports)
+        cache_read_tokens = sum(report.cache_read_tokens for report in self.reports)
 
         return CostReportSchema(
             model=model,
@@ -55,4 +62,6 @@ class CostService(CostServiceProtocol):
             input_cost=input_cost,
             output_cost=output_cost,
             total_cost=total_cost,
+            cache_creation_tokens=cache_creation_tokens,
+            cache_read_tokens=cache_read_tokens,
         )
